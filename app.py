@@ -6,16 +6,19 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 import requests
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 app = Flask(__name__)
 
 # Настройки для Google Sheets API
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
-SPREADSHEET_ID = 'ваш_spreadsheet_id'
+SPREADSHEET_ID =os.environ.get("SPREADSHEET_ID")
 RANGE_NAME = 'Sheet1!A1:D10'
 
 # Настройки для DeepSeek API
-DEEPSEEK_API_KEY = 'ваш_api_key'
+DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY")
 DEEPSEEK_API_URL = 'https://api.deepseek.com/v1/chat/completions'
 
 # Функция для авторизации в Google Sheets API
@@ -44,13 +47,6 @@ def get_sheet_data():
 
 # Функция для отправки запроса в DeepSeek API
 def query_deepseek(prompt):
-    try:
-        response = requests.post(..., timeout=10)
-        response.raise_for_status()
-        return response.json()
-    except requests.exceptions.Timeout:
-        return {'error': 'Timeout', 'status_code': 504}
-
     headers = {
         'Authorization': f'Bearer {DEEPSEEK_API_KEY}',
         'Content-Type': 'application/json'
@@ -59,20 +55,17 @@ def query_deepseek(prompt):
         'model': 'deepseek-chat',
         'messages': [{'role': 'user', 'content': prompt}]
     }
-    response = requests.post(DEEPSEEK_API_URL, headers=headers, json=data)
-    return response.json()
-
-
-
+    try:
+        response = requests.post(DEEPSEEK_API_URL, headers=headers, json=data, timeout=10)
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.Timeout:
+        return {'error': 'Timeout', 'status_code': 504}
+    except requests.exceptions.RequestException as e:
+        # Возвращаем статус код из исключения
+        return {'error': str(e), 'status_code': e.response.status_code if e.response else 500}
 
 # Маршрут для обработки запросов от клиентов
-
-"""@app.route('/chat', methods=['POST'])
-def chat():
-    if not request.json or 'message' not in request.json:
-        return jsonify({'error': 'Invalid request'}), 400
-"""
-
 
 @app.route('/chat', methods=['POST'])
 def chat():

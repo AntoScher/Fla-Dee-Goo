@@ -1,7 +1,10 @@
 import pytest
 from unittest.mock import patch, MagicMock
 from app import app, query_deepseek, get_sheet_data
+import responses
 import json
+import os
+os.environ['CURL_CA_BUNDLE'] = ''
 
 
 @patch('app.authenticate_google_sheets')
@@ -42,28 +45,25 @@ def test_get_sheet_data(mock_auth, mock_build):
 # Тест 2: Mocking для DeepSeek API
 @patch('app.requests.post')
 def test_query_deepseek(mock_post):
-    # Настройка мока
     mock_response = MagicMock()
-    mock_response.json.return_value = {'choices': [{'message': 'test'}]}
+    mock_response.json.return_value = {'choices': [{'message': {'content': 'test'}}]}
     mock_post.return_value = mock_response
 
-    # Вызов функции
     result = query_deepseek("test prompt")
 
-    # Проверки
-    assert 'test' in result['choices'][0]['message']
+    assert 'test' in result['choices'][0]['message']['content']
     mock_post.assert_called_once_with(
         'https://api.deepseek.com/v1/chat/completions',
         headers={
-            'Authorization': 'Bearer ваш_api_key',
+            'Authorization': 'Bearer DEEPSEEK_API_KEY-111',
             'Content-Type': 'application/json'
         },
         json={
             'model': 'deepseek-chat',
             'messages': [{'role': 'user', 'content': 'test prompt'}]
-        }
+        },
+        timeout=10
     )
-
 
 # Тест 3: Интеграционный тест для /chat
 @patch('app.query_deepseek')
@@ -80,18 +80,6 @@ def test_chat_route(mock_deepseek, client):
 
 
 # Тест 4: Тест обработки ошибок
-"""@patch('app.requests.post')
-def test_api_error_handling(mock_post, client):
-    # Настройка ошибки
-    mock_post.return_value.status_code = 500
-    mock_post.return_value.json.return_value = {'error': 'Internal Server Error'}
-
-    response = client.post('/chat', json={'message': 'error test'})
-
-    assert response.status_code == 500
-    assert b'error' in response.data
-"""
-
 @patch('app.requests.post')
 def test_api_error_handling(mock_post, client):
     mock_post.return_value.status_code = 500
@@ -101,8 +89,6 @@ def test_api_error_handling(mock_post, client):
     }
     response = client.post('/chat', json={'message': 'test'})
     assert response.status_code == 500  # Теперь тест пройдет
-
-
 
 
 # Тест 5: Проверка формирования промпта
@@ -122,42 +108,34 @@ def test_report_generation(mock_sheet, mock_deepseek, client):
 
 
 # Тест 6: Использование responses
-import responses
-
 @responses.activate
 def test_analytics_route(client):
-    # Мок для DeepSeek
-    responses.add(
-        responses.POST,
-        'https://api.deepseek.com/v1/chat/completions',
-        json={'choices': [{'message': 'analytics result'}]},
-        status=200
-    )
-
-    # Мок для OAuth2
-    responses.add(
-        responses.POST,
-        'https://oauth2.googleapis.com/token',
-        json={'error': 'invalid_grant'},
-        status=400
-    )
-
-    # Мок для OAuth2 токена
+    # Мок для OAuth токена
     responses.add(
         responses.POST,
         'https://oauth2.googleapis.com/token',
         json={'access_token': 'fake_token'},
-        status=200
+        status=200,
+        verify=False
     )
+
     # Мок для Google Sheets
     responses.add(
         responses.GET,
-        'https://sheets.googleapis.com/v4/spreadsheets/TEST_ID/values/Sheet1!A1:D10',
+        'https://sheets.googleapis.com/v4/spreadsheets/ваш_spreadsheet_id/values/Sheet1!A1:D10',
         json={'values': [[1], [2]]},
-        status=200
+        status=200,
+        verify=False
+    )
+
+    # Мок для DeepSeek
+    responses.add(
+        responses.POST,
+        'https://api.deepseek.com/v1/chat/completions',
+        json={'choices': [{'message': {'content': 'analytics result'}}]},
+        status=200,
+        verify=False
     )
 
     response = client.get('/analytics')
     assert response.status_code == 200
-    #assert b'analytics result' in response.data
-
