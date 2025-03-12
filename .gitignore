@@ -173,3 +173,5 @@ cython_debug/
 tests/credentials.json
 tests/token.json
 
+credentials.json
+token.json
