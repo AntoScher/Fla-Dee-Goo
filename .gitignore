@@ -175,3 +175,5 @@ tests/token.json
 
 credentials.json
 token.json
+tests/credentials.json
+tests/token.json    

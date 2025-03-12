@@ -66,7 +66,23 @@ def query_deepseek(prompt):
         return {'error': str(e), 'status_code': e.response.status_code if e.response else 500}
 
 # Маршрут для обработки запросов от клиентов
+@app.route('/chat', methods=['POST'])
+def chat():
+    if not request.is_json:
+        return jsonify({'error': 'Invalid content type'}), 415
 
+    data = request.get_json()
+    if not data or 'message' not in data:
+        return jsonify({'error': 'Missing message'}), 400
+
+    user_input = data['message']
+    deepseek_response = query_deepseek(user_input)
+    status_code = deepseek_response.get('status_code', 200)
+    return jsonify(deepseek_response), status_code
+
+
+
+"""
 @app.route('/chat', methods=['POST'])
 def chat():
     if not request.is_json:
@@ -85,7 +101,7 @@ def chat():
 
     response = query_deepseek(user_input)
     return jsonify(response), response.get('status_code', 500)  # Возвращаем статус из API
-
+"""
 
 # Маршрут для генерации отчетов
 @app.route('/generate_report', methods=['GET'])
