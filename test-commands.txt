@@ -1,0 +1,10 @@
+#Это команды для запуска тестов
+
+# Все тесты
+pytest tests/ -v
+
+# Только routes
+pytest tests/test_routes.py -v
+
+# Конкретный параметризованный тест
+pytest tests/test_routes.py::test_chat_route_validation -v

@@ -170,6 +170,6 @@ cython_debug/
 # PyPI configuration file
 .pypirc
 .env/
-credentials.json
-token.json
+tests/credentials.json
+tests/token.json
 
