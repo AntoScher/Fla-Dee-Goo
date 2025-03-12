@@ -3,6 +3,7 @@ import responses, requests
 from app import app
 
 
+
 @pytest.fixture
 def client():
     app.config['TESTING'] = True

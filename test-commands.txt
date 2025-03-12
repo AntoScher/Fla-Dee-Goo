@@ -8,3 +8,6 @@ pytest tests/test_routes.py -v
 
 # Конкретный параметризованный тест
 pytest tests/test_routes.py::test_chat_route_validation -v
+
+# для конкретного теста
+python -m pytest tests/test_app.py::test_chat_route

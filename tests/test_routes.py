@@ -3,6 +3,31 @@ from unittest.mock import patch, MagicMock
 from app import app
 import json
 
+import pytest
+
+
+@pytest.mark.parametrize("status_code,expected", [
+    (200, True),
+    (400, False),
+    (500, False)
+])
+@patch('app.query_deepseek')
+def test_response_codes(mock_deepseek, client, status_code, expected):
+    mock_deepseek.return_value = {'status_code': status_code}
+
+    response = client.post('/chat', json={'message': 'test'})
+
+    assert (response.status_code == 200) == expected
+
+
+@patch('app.authenticate_google_sheets')
+def test_your_test_name(mock_auth):
+    # Заглушка для учетных данных
+    mock_creds = MagicMock()
+    mock_creds.valid = True
+    mock_auth.return_value = mock_creds
+
+    # Остальная часть теста
 
 @pytest.fixture
 def client():
@@ -12,18 +37,24 @@ def client():
 
 
 # Параметризация для разных сценариев ввода
+
 @pytest.mark.parametrize("input_data,expected_status,expected_key", [
     ({'message': 'Hello'}, 200, 'response'),
     ({}, 400, 'error'),
     (None, 415, 'error'),
     ({'message': ''}, 400, 'error'),
 ])
+
+#@pytest.mark.parametrize("error_code", [400, 500, 502])
+#def test_error_responses(error_code):
+
 @patch('app.query_deepseek')
 def test_chat_route_validation(mock_deepseek, client, input_data, expected_status, expected_key):
     # Настройка мока для успешных случаев
     if expected_status == 200:
-        mock_deepseek.return_value = {'response': 'test'}
-
+        mock_deepseek.return_value = {'response': 'test', 'status_code': 200}
+    else:
+        mock_deepseek.return_value = {}  # Заглушка для ошибок
     # Вызов эндпоинта
     response = client.post('/chat', json=input_data)
 

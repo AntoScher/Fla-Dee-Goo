@@ -44,6 +44,13 @@ def get_sheet_data():
 
 # Функция для отправки запроса в DeepSeek API
 def query_deepseek(prompt):
+    try:
+        response = requests.post(..., timeout=10)
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.Timeout:
+        return {'error': 'Timeout', 'status_code': 504}
+
     headers = {
         'Authorization': f'Bearer {DEEPSEEK_API_KEY}',
         'Content-Type': 'application/json'
@@ -55,13 +62,37 @@ def query_deepseek(prompt):
     response = requests.post(DEEPSEEK_API_URL, headers=headers, json=data)
     return response.json()
 
+
+
+
 # Маршрут для обработки запросов от клиентов
+
+"""@app.route('/chat', methods=['POST'])
+def chat():
+    if not request.json or 'message' not in request.json:
+        return jsonify({'error': 'Invalid request'}), 400
+"""
+
+
 @app.route('/chat', methods=['POST'])
 def chat():
-    user_input = request.json.get('message')
-    # Генерация ответа с помощью DeepSeek
+    if not request.is_json:
+        return jsonify({'error': 'Invalid content type'}), 415
+
+    data = request.get_json()
+    if 'message' not in data:
+        return jsonify({'error': 'Missing message'}), 400
+
+    user_input = request.json['message']
+    deepseek_response = query_deepseek(user_input)
+
+    # Добавьте проверку статуса
+    status_code = deepseek_response.get('status_code', 200)
+    return jsonify(deepseek_response), status_code
+
     response = query_deepseek(user_input)
-    return jsonify(response)
+    return jsonify(response), response.get('status_code', 500)  # Возвращаем статус из API
+
 
 # Маршрут для генерации отчетов
 @app.route('/generate_report', methods=['GET'])
@@ -82,6 +113,8 @@ def analytics():
     analytics_prompt = "Проанализируй следующие данные и предоставь аналитику: " + str(data)
     analytics_result = query_deepseek(analytics_prompt)
     return jsonify(analytics_result)
+
+
 
 if __name__ == '__main__':
     app.run(debug=True)
