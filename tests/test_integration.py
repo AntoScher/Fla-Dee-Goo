@@ -1,10 +1,9 @@
 import pytest
-import responses
-import requests
+import responses, requests
+from unittest.mock import patch, MagicMock
 from app import app
+import json
 
-from dotenv import load_dotenv
-load_dotenv('.env.test')  # Явно указываем файл для тестов
 
 @pytest.fixture
 def client():
@@ -12,15 +11,16 @@ def client():
     with app.test_client() as client:
         yield client
 
-@responses.activate
-def test_full_workflow(client):
-    responses.add(
-        responses.POST,
-        'https://oauth2.googleapis.com/token',
-        json={'access_token': 'fake_token'},
-        status=200
-    )
 
+@responses.activate
+@patch('app.authenticate_google_sheets')
+def test_full_workflow(mock_auth, client):
+    # Мокируем аутентификацию Google
+    mock_creds = MagicMock()
+    mock_creds.valid = True
+    mock_auth.return_value = mock_creds
+
+    # Мокируем внешние сервисы
     responses.add(
         responses.GET,
         'https://sheets.googleapis.com/v4/spreadsheets/TEST_ID/values/Sheet1!A1:D10',
@@ -39,20 +39,21 @@ def test_full_workflow(client):
     assert response.status_code == 200
     assert b'integration test result' in response.data
 
+
 @responses.activate
-def test_google_auth_failure(client):
-    responses.add(
-        responses.POST,
-        'https://oauth2.googleapis.com/token',
-        json={'error': 'invalid_grant', 'error_description': 'Invalid grant'},
-        status=400
-    )
+@patch('app.authenticate_google_sheets')
+def test_google_auth_failure(mock_auth, client):
+    # Мокируем ошибку аутентификации
+    mock_auth.side_effect = Exception("Auth error")
 
     response = client.get('/generate_report')
     assert response.status_code == 500
+    assert b'Auth error' in response.data
+
 
 @responses.activate
 def test_api_timeout(client):
+    # Мокируем таймаут API
     responses.add(
         responses.POST,
         'https://api.deepseek.com/v1/chat/completions',
@@ -61,3 +62,4 @@ def test_api_timeout(client):
 
     response = client.post('/chat', json={'message': 'timeout test'})
     assert response.status_code == 504
+    assert b'Timeout' in response.data
