@@ -34,7 +34,7 @@ def test_full_workflow(mock_build, mock_auth, client):
     assert b'success' in response.data
 
 
-@responses.activate
+"""@responses.activate
 @patch('app.get_sheet_data')
 def test_google_auth_failure(mock_sheet, client):
     mock_sheet.side_effect = Exception("Auth error")
@@ -42,6 +42,18 @@ def test_google_auth_failure(mock_sheet, client):
     response = client.get('/generate_report')
     assert response.status_code == 500
     assert b'Auth error' in response.data
+"""
+
+@responses.activate
+@patch('app.get_sheet_data')
+def test_google_auth_failure(mock_sheet, client):
+    mock_sheet.side_effect = Exception("Auth error")
+
+    response = client.get('/generate_report')
+
+    # Проверяем статус и содержимое JSON
+    assert response.status_code == 500
+    assert response.get_json() == {'error': 'Auth error'}
 
 
 @responses.activate

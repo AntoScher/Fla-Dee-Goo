@@ -80,38 +80,16 @@ def chat():
     status_code = deepseek_response.get('status_code', 200)
     return jsonify(deepseek_response), status_code
 
-
-
-"""
-@app.route('/chat', methods=['POST'])
-def chat():
-    if not request.is_json:
-        return jsonify({'error': 'Invalid content type'}), 415
-
-    data = request.get_json()
-    if 'message' not in data:
-        return jsonify({'error': 'Missing message'}), 400
-
-    user_input = request.json['message']
-    deepseek_response = query_deepseek(user_input)
-
-    # Добавьте проверку статуса
-    status_code = deepseek_response.get('status_code', 200)
-    return jsonify(deepseek_response), status_code
-
-    response = query_deepseek(user_input)
-    return jsonify(response), response.get('status_code', 500)  # Возвращаем статус из API
-"""
-
-# Маршрут для генерации отчетов
 @app.route('/generate_report', methods=['GET'])
 def generate_report():
-    # Получение данных из Google Sheets
-    data = get_sheet_data()
-    # Генерация отчета с помощью DeepSeek
-    report_prompt = "Сгенерируй отчет на основе следующих данных: " + str(data)
-    report = query_deepseek(report_prompt)
-    return jsonify(report)
+    try:
+        data = get_sheet_data()
+        report_prompt = "Сгенерируй отчет: " + str(data)
+        report = query_deepseek(report_prompt)
+        return jsonify(report)
+    except Exception as e:
+        # Явно возвращаем JSON с ошибкой и статусом 500
+        return jsonify({'error': str(e)}), 500
 
 # Маршрут для аналитики
 @app.route('/analytics', methods=['GET'])
