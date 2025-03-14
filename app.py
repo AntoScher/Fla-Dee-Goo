@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template
 import google.auth
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
@@ -11,6 +11,12 @@ from dotenv import load_dotenv
 load_dotenv()
 
 app = Flask(__name__)
+
+# Добавьте этот код перед if __name__ == '__main__':
+
+@app.route('/')  # 👈 Новый роут для главной страницы
+def home():
+    return render_template('index.html')  # Рендерим HTML-шаблон
 
 # Настройки для Google Sheets API
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']

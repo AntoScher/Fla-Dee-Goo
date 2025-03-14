@@ -1,10 +1,86 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>Flask's Index</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flack Chat</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-<a>Это просто тестовая страница для проверки работы Фласк </a>
+    <div class="chat-container">
+        <div class="chat-header">
+            <h1>Flack ChatBot</h1>
+            <p>Powered by DeepSeek AI</p>
+        </div>
+
+        <div id="chat-messages" class="chat-messages">
+            <!-- Сообщения будут здесь -->
+        </div>
+
+        <form id="chat-form" class="chat-input">
+            <input type="text"
+                   id="user-message"
+                   placeholder="Введите ваше сообщение..."
+                   autocomplete="off">
+            <button type="submit">Отправить</button>
+        </form>
+    </div>
+
+    <script>
+        const chatForm = document.getElementById('chat-form');
+        const chatMessages = document.getElementById('chat-messages');
+        const userInput = document.getElementById('user-message');
+
+        // Обработчик отправки сообщения
+        chatForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const message = userInput.value.trim();
+            if (!message) return;
+
+            // Добавляем сообщение пользователя
+            appendMessage('user', message);
+            userInput.value = '';
+
+            try {
+                // Отправляем запрос на сервер
+                const response = await fetch('/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message })
+                });
+
+                const data = await response.json();
+
+                // Обрабатываем ответ от DeepSeek
+                if (data.choices && data.choices[0].message.content) {
+                    appendMessage('bot', data.choices[0].message.content);
+                } else {
+                    appendMessage('bot', 'Ошибка получения ответа 🤖');
+                }
+            } catch (error) {
+                appendMessage('bot', 'Ошибка соединения с сервером ⚠️');
+            }
+        });
+
+        // Функция добавления сообщения в чат
+        function appendMessage(sender, text) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${sender}-message`;
+
+            const content = `
+                <div class="message-content">
+                    ${text.replace(/\n/g, '<br>')}
+                </div>
+                <div class="message-time">${new Date().toLocaleTimeString()}</div>
+            `;
+
+            messageDiv.innerHTML = content;
+            chatMessages.appendChild(messageDiv);
+
+            // Автоскролл к новому сообщению
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+    </script>
 </body>
 </html>
