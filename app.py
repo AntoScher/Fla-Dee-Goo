@@ -24,15 +24,15 @@ DEEPSEEK_API_URL = 'https://api.deepseek.com/v1/chat/completions'
 # Функция для авторизации в Google Sheets API
 def authenticate_google_sheets():
     creds = None
-    if os.path.exists('tests/token.json'):
-        creds = Credentials.from_authorized_user_file('tests/token.json', SCOPES)
+    if os.path.exists('token.json'):
+        creds = Credentials.from_authorized_user_file('token.json', SCOPES)
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
-            flow = InstalledAppFlow.from_client_secrets_file('tests/credentials.json', SCOPES)
+            flow = InstalledAppFlow.from_client_secrets_file('credentials.json', SCOPES)
             creds = flow.run_local_server(port=0)
-        with open('tests/token.json', 'w') as token:
+        with open('token.json', 'w') as token:
             token.write(creds.to_json())
     return creds
 
@@ -80,29 +80,6 @@ def chat():
     status_code = deepseek_response.get('status_code', 200)
     return jsonify(deepseek_response), status_code
 
-
-
-"""
-@app.route('/chat', methods=['POST'])
-def chat():
-    if not request.is_json:
-        return jsonify({'error': 'Invalid content type'}), 415
-
-    data = request.get_json()
-    if 'message' not in data:
-        return jsonify({'error': 'Missing message'}), 400
-
-    user_input = request.json['message']
-    deepseek_response = query_deepseek(user_input)
-
-    # Добавьте проверку статуса
-    status_code = deepseek_response.get('status_code', 200)
-    return jsonify(deepseek_response), status_code
-
-    response = query_deepseek(user_input)
-    return jsonify(response), response.get('status_code', 500)  # Возвращаем статус из API
-"""
-
 # Маршрут для генерации отчетов
 @app.route('/generate_report', methods=['GET'])
 def generate_report():
@@ -122,8 +99,6 @@ def analytics():
     analytics_prompt = "Проанализируй следующие данные и предоставь аналитику: " + str(data)
     analytics_result = query_deepseek(analytics_prompt)
     return jsonify(analytics_result)
-
-
 
 if __name__ == '__main__':
     app.run(debug=True)
