@@ -8,15 +8,25 @@
 </head>
 <body>
     <div class="chat-container">
+        <!-- Блок управления -->
+        <div class="controls">
+            <button class="report-btn">📊 Сгенерировать отчет</button>
+            <button class="analytics-btn">📈 Получить аналитику</button>
+        </div>
+
+        <!-- Шапка чата -->
         <div class="chat-header">
             <h1>Flack ChatBot</h1>
             <p>Powered by DeepSeek AI</p>
         </div>
 
-        <div id="chat-messages" class="chat-messages">
-            <!-- Сообщения будут здесь -->
-        </div>
+        <!-- Основной чат -->
+        <div id="chat-messages" class="chat-messages"></div>
 
+        <!-- Контейнер отчетов -->
+        <div id="report-container" class="report-container"></div>
+
+        <!-- Форма ввода -->
         <form id="chat-form" class="chat-input">
             <input type="text"
                    id="user-message"
@@ -27,9 +37,11 @@
     </div>
 
     <script>
+        // Элементы интерфейса
         const chatForm = document.getElementById('chat-form');
         const chatMessages = document.getElementById('chat-messages');
         const userInput = document.getElementById('user-message');
+        const reportContainer = document.getElementById('report-container');
 
         // Обработчик отправки сообщения
         chatForm.addEventListener('submit', async (e) => {
@@ -38,22 +50,22 @@
             const message = userInput.value.trim();
             if (!message) return;
 
-            // Добавляем сообщение пользователя
             appendMessage('user', message);
             userInput.value = '';
 
             try {
-                // Отправляем запрос на сервер
                 const response = await fetch('/chat', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': '{{ csrf_token() }}'
+                    },
                     body: JSON.stringify({ message })
                 });
 
                 const data = await response.json();
 
-                // Обрабатываем ответ от DeepSeek
-                if (data.choices && data.choices[0].message.content) {
+                if (data.choices?.[0]?.message?.content) {
                     appendMessage('bot', data.choices[0].message.content);
                 } else {
                     appendMessage('bot', 'Ошибка получения ответа 🤖');
@@ -63,24 +75,83 @@
             }
         });
 
-        // Функция добавления сообщения в чат
+        // Функции для отчетов и аналитики
+        async function generateReport() {
+            showLoader();
+            try {
+                const response = await fetch('/generate_report');
+                const data = await response.json();
+                displayReport('Отчет', data);
+            } catch (error) {
+                displayError('Ошибка генерации отчета');
+            }
+            hideLoader();
+        }
+
+        async function getAnalytics() {
+            showLoader();
+            try {
+                const response = await fetch('/analytics');
+                const data = await response.json();
+                displayReport('Аналитика', data);
+            } catch (error) {
+                displayError('Ошибка получения аналитики');
+            }
+            hideLoader();
+        }
+
+        // Вспомогательные функции
         function appendMessage(sender, text) {
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${sender}-message`;
 
-            const content = `
-                <div class="message-content">
-                    ${text.replace(/\n/g, '<br>')}
-                </div>
+            messageDiv.innerHTML = `
+                <div class="message-content">${text.replace(/\n/g, '<br>')}</div>
                 <div class="message-time">${new Date().toLocaleTimeString()}</div>
             `;
 
-            messageDiv.innerHTML = content;
             chatMessages.appendChild(messageDiv);
-
-            // Автоскролл к новому сообщению
             chatMessages.scrollTop = chatMessages.scrollHeight;
         }
+
+        function displayReport(title, data) {
+            let content = '';
+            if (data.error) {
+                content = `<div class="error">${data.error}</div>`;
+            } else if (data.choices?.[0]?.message?.content) {
+                content = `
+                    <div class="report-title">${title}</div>
+                    <div class="report-content">${data.choices[0].message.content}</div>
+                `;
+            }
+            reportContainer.innerHTML = content;
+        }
+
+        function showLoader() {
+            document.body.classList.add('loading');
+        }
+
+        function hideLoader() {
+            document.body.classList.remove('loading');
+        }
+
+        function displayError(text) {
+            reportContainer.innerHTML = `<div class="error">⚠️ ${text}</div>`;
+        }
+
+        // Инициализация кнопок
+        document.addEventListener('DOMContentLoaded', () => {
+            document.querySelector('.report-btn').addEventListener('click', generateReport);
+            document.querySelector('.analytics-btn').addEventListener('click', getAnalytics);
+
+            // Обработчик Enter для поля ввода
+            userInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    chatForm.dispatchEvent(new Event('submit'));
+                }
+            });
+        });
     </script>
 </body>
 </html>

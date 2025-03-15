@@ -1,113 +1,174 @@
 from flask import Flask, request, jsonify, render_template
+from flask_wtf.csrf import CSRFProtect
 import google.auth
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
 import requests
 import os
 from dotenv import load_dotenv
+import logging
 
+# Настройка логов
+logging.basicConfig(level=logging.INFO)
+
+# Загрузка переменных окружения
 load_dotenv()
 
+# Инициализация приложения
 app = Flask(__name__)
+app.config['SECRET_KEY'] = os.getenv('FLASK_SECRET_KEY', 'default-secret-key')
+csrf = CSRFProtect(app)
 
-# Добавьте этот код перед if __name__ == '__main__':
-
-@app.route('/')  # 👈 Новый роут для главной страницы
-def home():
-    return render_template('index.html')  # Рендерим HTML-шаблон
-
-# Настройки для Google Sheets API
-SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
-SPREADSHEET_ID =os.environ.get("SPREADSHEET_ID")
-RANGE_NAME = 'Sheet1!A1:D10'
-
-# Настройки для DeepSeek API
-DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY")
+# Конфигурация API
+SCOPES = ['https://www.googleapis.com/auth/spreadsheets.readonly']
+SPREADSHEET_ID = os.getenv("SPREADSHEET_ID")
+RANGE_NAME = 'Sheet1!A1:D4'
+DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
 DEEPSEEK_API_URL = 'https://api.deepseek.com/v1/chat/completions'
 
-# Функция для авторизации в Google Sheets API
-def authenticate_google_sheets():
+
+def google_auth():
+    """Аутентификация в Google Sheets API"""
     creds = None
-    if os.path.exists('tests/token.json'):
-        creds = Credentials.from_authorized_user_file('tests/token.json', SCOPES)
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
-            flow = InstalledAppFlow.from_client_secrets_file('tests/credentials.json', SCOPES)
-            creds = flow.run_local_server(port=0)
-        with open('tests/token.json', 'w') as token:
-            token.write(creds.to_json())
-    return creds
-
-# Функция для получения данных из Google Sheets
-def get_sheet_data():
-    creds = authenticate_google_sheets()
-    service = build('sheets', 'v4', credentials=creds)
-    sheet = service.spreadsheets()
-    result = sheet.values().get(spreadsheetId=SPREADSHEET_ID, range=RANGE_NAME).execute()
-    values = result.get('values', [])
-    return values
-
-# Функция для отправки запроса в DeepSeek API
-def query_deepseek(prompt):
-    headers = {
-        'Authorization': f'Bearer {DEEPSEEK_API_KEY}',
-        'Content-Type': 'application/json'
-    }
-    data = {
-        'model': 'deepseek-chat',
-        'messages': [{'role': 'user', 'content': prompt}]
-    }
     try:
-        response = requests.post(DEEPSEEK_API_URL, headers=headers, json=data, timeout=10)
+        if os.path.exists('token.json'):
+            creds = Credentials.from_authorized_user_file('token.json', SCOPES)
+
+        if not creds or not creds.valid:
+            if creds and creds.expired and creds.refresh_token:
+                creds.refresh(Request())
+            else:
+                if not os.path.exists('credentials.json'):
+                    raise FileNotFoundError("credentials.json not found")
+
+                flow = InstalledAppFlow.from_client_secrets_file(
+                    'credentials.json', SCOPES)
+                creds = flow.run_local_server(port=0)
+
+            with open('token.json', 'w') as token_file:
+                token_file.write(creds.to_json())
+
+        return creds
+
+    except Exception as e:
+        logging.error(f"Google Auth Error: {str(e)}")
+        raise
+
+
+def get_sheet_data():
+    """Получение данных из Google Sheets"""
+    try:
+        service = build('sheets', 'v4', credentials=google_auth())
+        result = service.spreadsheets().values().get(
+            spreadsheetId=SPREADSHEET_ID,
+            range=RANGE_NAME
+        ).execute()
+        return result.get('values', [])
+
+    except HttpError as e:
+        logging.error(f"Google Sheets API Error: {str(e)}")
+        return []
+    except Exception as e:
+        logging.error(f"General Error: {str(e)}")
+        return []
+
+
+def query_deepseek(prompt):
+    """Запрос к DeepSeek API"""
+    try:
+        headers = {
+            'Authorization': f'Bearer {DEEPSEEK_API_KEY}',
+            'Content-Type': 'application/json'
+        }
+        payload = {
+            'model': 'deepseek-chat',
+            'messages': [{'role': 'user', 'content': prompt}],
+            'max_tokens': 500
+        }
+
+        response = requests.post(
+            DEEPSEEK_API_URL,
+            headers=headers,
+            json=payload,
+            timeout=15
+        )
         response.raise_for_status()
         return response.json()
-    except requests.exceptions.Timeout:
-        return {'error': 'Timeout', 'status_code': 504}
-    except requests.exceptions.RequestException as e:
-        # Возвращаем статус код из исключения
-        return {'error': str(e), 'status_code': e.response.status_code if e.response else 500}
 
-# Маршрут для обработки запросов от клиентов
+    except Exception as e:
+        logging.error(f"DeepSeek API Error: {str(e)}")
+        return {'error': str(e)}
+
+
+@app.route('/')
+def home():
+    return render_template('index.html')
+
+
 @app.route('/chat', methods=['POST'])
+@csrf.exempt
 def chat():
-    if not request.is_json:
-        return jsonify({'error': 'Invalid content type'}), 415
+    """Обработчик чата"""
+    try:
+        if not request.is_json:
+            return jsonify({'error': 'Invalid content type'}), 415
 
-    data = request.get_json()
-    if not data or 'message' not in data:
-        return jsonify({'error': 'Missing message'}), 400
+        data = request.get_json()
+        message = data.get('message', '').strip()
 
-    user_input = data['message']
-    deepseek_response = query_deepseek(user_input)
-    status_code = deepseek_response.get('status_code', 200)
-    return jsonify(deepseek_response), status_code
+        if not message:
+            return jsonify({'error': 'Empty message'}), 400
+        if len(message) > 1000:
+            return jsonify({'error': 'Message too long'}), 400
+
+        response = query_deepseek(message)
+        return jsonify(response)
+
+    except Exception as e:
+        logging.error(f"Chat Error: {str(e)}")
+        return jsonify({'error': 'Internal server error'}), 500
+
 
 @app.route('/generate_report', methods=['GET'])
 def generate_report():
+    """Генерация отчета"""
     try:
         data = get_sheet_data()
-        report_prompt = "Сгенерируй отчет: " + str(data)
-        report = query_deepseek(report_prompt)
-        return jsonify(report)
+        print(f"Получены данные из таблицы: {data}")  # Добавьте эту строку
+        if not data:
+            return jsonify({'error': 'No data found in sheet'}), 404
+
+        response = query_deepseek(f"Сгенерируй детальный отчет на основе данных: {data}")
+        return jsonify(response)
+
     except Exception as e:
-        # Явно возвращаем JSON с ошибкой и статусом 500
+        logging.error(f"Report Generation Error: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-# Маршрут для аналитики
+
 @app.route('/analytics', methods=['GET'])
 def analytics():
-    # Получение данных из Google Sheets
-    data = get_sheet_data()
-    # Генерация аналитики с помощью DeepSeek
-    analytics_prompt = "Проанализируй следующие данные и предоставь аналитику: " + str(data)
-    analytics_result = query_deepseek(analytics_prompt)
-    return jsonify(analytics_result)
+    """Получение аналитики"""
+    try:
+        data = get_sheet_data()
+        if not data:
+            return jsonify({'error': 'No data found in sheet'}), 404
 
+        response = query_deepseek(f"Проведи анализ данных и подготовь аналитику: {data}")
+        return jsonify(response)
+
+    except Exception as e:
+        logging.error(f"Analytics Error: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(
+        host='127.0.0.1',
+        port=5000,
+        debug=True,
+        ssl_context=None
+    )
