@@ -172,3 +172,4 @@ cython_debug/
 .env/
 credentials.json
 token.json
+secret.py
