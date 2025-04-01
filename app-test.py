@@ -36,8 +36,8 @@ def google_auth():
     """Аутентификация в Google Sheets API"""
     creds = None
     try:
-        if os.path.exists('token.json'):
-            creds = Credentials.from_authorized_user_file('token.json', SCOPES)
+        if os.path.exists('__token.json'):
+            creds = Credentials.from_authorized_user_file('__token.json', SCOPES)
 
         if not creds or not creds.valid:
             if creds and creds.expired and creds.refresh_token:
@@ -50,7 +50,7 @@ def google_auth():
                     'credentials.json', SCOPES)
                 creds = flow.run_local_server(port=0)
 
-            with open('token.json', 'w') as token_file:
+            with open('__token.json', 'w') as token_file:
                 token_file.write(creds.to_json())
 
         return creds
